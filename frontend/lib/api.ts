@@ -1,6 +1,30 @@
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body as T;
+}
+
+import type { SignupPayload, User } from "./types";
+
+export const auth = {
+  signup: (payload: SignupPayload) =>
+    apiFetch<User>("/auth/signup", { method: "POST", body: JSON.stringify(payload) }),
+  login: (email: string, password: string) =>
+    apiFetch<User>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  logout: () => apiFetch<{ message: string }>("/auth/logout", { method: "POST" }),
+  me: () => apiFetch<User>("/auth/me"),
+  occupations: () =>
+    apiFetch<{ occupations: string[]; employmentTypes: string[] }>("/auth/occupations"),
+};
+
 // EventSource only supports GET, so we POST with fetch and parse the SSE
 // frames off the response body ourselves.
 export async function sseFetch(

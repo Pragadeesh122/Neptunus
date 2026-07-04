@@ -13,3 +13,9 @@ REGULATIONS_GOV_API_BASE = os.getenv(
 )
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat")
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_TTL_HOURS = int(os.getenv("JWT_TTL_HOURS", "72"))

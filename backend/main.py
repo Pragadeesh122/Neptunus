@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from config import OPENROUTER_MODEL
+from database import init_db
 from federal_register import get_rule_detail
 from llm import chat_json, stream_chat
 from prompts import draft_messages, summarize_messages
@@ -16,11 +17,13 @@ from regulations import (
     list_open_proposed_rules,
     submit_comment,
 )
+from routers.auth import router as auth_router
 from schemas import DraftRequest, SubmitRequest, SummarizeRequest
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     app.state.client = httpx.AsyncClient(timeout=30)
     yield
     await app.state.client.aclose()
@@ -28,13 +31,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Public Comment Copilot API", lifespan=lifespan)
 
-# Hackathon mode: no credentials involved, so a wildcard origin is fine.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 

@@ -29,3 +29,30 @@ export type Answer = {
   question: string;
   answer: string;
 };
+
+export type User = {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  occupation: string | null;
+  employmentType: string | null;
+  customInfo: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type SignupPayload = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  occupation: string;
+  employmentType: string;
+  customInfo: Record<string, string>;
+};
