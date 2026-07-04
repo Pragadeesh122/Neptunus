@@ -30,6 +30,42 @@ export type Answer = {
   answer: string;
 };
 
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type RuleRef = {
+  documentNumber: string;
+  title: string;
+  type: string;
+  abstract: string;
+  publicationDate: string;
+  effectiveOn: string;
+  agencies: string[];
+  cfrReferences: string[];
+  docketIds: string[];
+  topics: string[];
+  commentable: boolean;
+  commentsCloseOn: string;
+  commentUrl: string;
+  htmlUrl: string;
+};
+
+export type RuleSection = {
+  section: string;
+  subsection: string;
+  page: string;
+  text: string;
+};
+
+export type RuleFull = RuleRef & {
+  rawTextUrl: string;
+  regulationIdNumbers: string[];
+  sections: RuleSection[];
+  fullText: string;
+};
+
 export type User = {
   id: string;
   email: string;

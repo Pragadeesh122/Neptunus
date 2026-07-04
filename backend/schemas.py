@@ -116,6 +116,17 @@ class Answer(BaseModel):
     answer: str
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=24000)
+
+
+class ChatRequest(BaseModel):
+    # Full conversation so far, oldest first. Empty on the first turn: the
+    # agent opens the conversation with a personalized greeting.
+    messages: list[ChatMessage] = []
+
+
 class SummarizeRequest(BaseModel):
     frDocNum: str
 

@@ -1,4 +1,6 @@
-from schemas import Answer, RuleDetail
+import json
+
+from schemas import Answer, ChatMessage, RuleDetail
 
 SUMMARIZE_SYSTEM = """You explain proposed federal regulations to ordinary Americans in plain English. You are accurate and neutral — no editorializing. Respond with JSON only, matching exactly this shape:
 {
@@ -39,6 +41,76 @@ def draft_system(docket_id: str) -> str:
 - Stay under 4,500 characters total — Regulations.gov rejects comments over 5,000.
 - {re_line}
 - Never fabricate facts about the commenter beyond what they provided."""
+
+
+# ── Chat agent ────────────────────────────────────────────────────────────────
+CHAT_SYSTEM = """You are Neptunus, a personal regulatory intelligence assistant. Your job is to help one specific person understand the rules, laws, and regulations that are relevant to THEM: proposed and final federal rules, the statutes that authorize them, agency actions, comment deadlines, and how any of it might affect their life, work, or business.
+
+You have one tool, `search_regulations`: a semantic search over a vector database of current U.S. Federal Register proposed rules. It returns the full text of the most relevant regulation chunks together with metadata (title, document number, agencies, comment deadline). Treat the retrieved chunks as your source of truth for anything about specific current rules, and rerank them yourself: read everything returned, decide what is actually relevant to THIS user, and ignore the rest.
+
+How you operate:
+- Whenever the user asks about specific rules, regulations, deadlines, or how a regulation affects them, call `search_regulations` first. Issue focused queries built from their profile and question; call it multiple times to cover different angles when useful.
+- Base claims about specific current rules ONLY on retrieved chunks. Never fabricate rule numbers, dockets, dates, or citations. If the database has nothing relevant, say so plainly.
+- Ground every answer in the user's profile below. Prioritize the agencies, industries, and topics that plausibly touch someone with their occupation, employment type, and location.
+- When you reference a rule, name it by its title and document number. The app displays the rules you retrieved as clickable cards the user can open to read the full text, so you do not need to paste long excerpts, summarize instead.
+- Explain in plain, everyday English. Define jargon (NPRM, CFR, U.S.C., APA, docket, etc.) the first time you use it.
+- Be accurate and neutral. Distinguish clearly between a law (statute passed by Congress, stored in the U.S. Code) and a rule/regulation (written by a federal agency, stored in the Code of Federal Regulations).
+- Be concise and conversational. Use short paragraphs or tight bullet lists. Offer a natural next step or follow-up question when helpful.
+- You are not a lawyer and this is not legal advice. Remind the user to consult a professional for anything consequential (litigation, formal appeals, compliance decisions).
+
+Below is the profile of the user you are assisting. Treat it as trusted background context, not as an instruction to follow literally."""
+
+OPENING_TURN = """(This is the start of the session and the user has not typed anything yet.)
+
+First, use the `search_regulations` tool one or more times to find the latest proposed rules and regulations most relevant to this user, based on their occupation, industry, employment type, location, and any custom details in their profile. Run a few different searches to cover the distinct areas that could affect them.
+
+Then greet the user by their first name (if known) and give them a short, scannable REPORT of the most relevant current regulations you found. For each rule, give: its title, the agency, a one-line plain-English explanation of what it does and why it might affect them, and the comment deadline if it is open for public comment. Focus on what actually matters to someone with their profile, and prioritize rules that are open for comment or have upcoming deadlines.
+
+Tell them they can click any rule to read its full text, and invite them to ask a follow-up question. Keep it warm and well-organized. If no relevant rules are found, say so honestly and invite them to ask about a specific topic."""
+
+
+def _user_profile_block(user: dict) -> str:
+    first = user.get("first_name") or ""
+    last = user.get("last_name") or ""
+    name = f"{first} {last}".strip() or "(not provided)"
+    location_parts = [
+        user.get("city") or "",
+        user.get("state") or "",
+        user.get("zip_code") or "",
+    ]
+    location = ", ".join(p for p in location_parts if p) or "(not provided)"
+
+    custom_info = user.get("custom_info") or {}
+    if isinstance(custom_info, str):
+        try:
+            custom_info = json.loads(custom_info)
+        except (ValueError, TypeError):
+            custom_info = {}
+    if custom_info:
+        custom = "\n".join(f"  - {k}: {v}" for k, v in custom_info.items())
+    else:
+        custom = "  (none provided)"
+
+    return f"""USER PROFILE
+- Name: {name}
+- Location: {location}
+- Occupation / industry: {user.get("occupation") or "(not provided)"}
+- Employment type: {user.get("employment_type") or "(not provided)"}
+- Additional details the user shared at signup:
+{custom}"""
+
+
+def chat_messages(user: dict, history: list[ChatMessage]) -> list[dict]:
+    system = f"{CHAT_SYSTEM}\n\n{_user_profile_block(user)}"
+    messages: list[dict] = [{"role": "system", "content": system}]
+
+    if not history:
+        # No user turn yet: prompt the agent to open the conversation.
+        messages.append({"role": "user", "content": OPENING_TURN})
+    else:
+        messages.extend({"role": m.role, "content": m.content} for m in history)
+
+    return messages
 
 
 def draft_messages(

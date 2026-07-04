@@ -12,7 +12,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-import type { SignupPayload, User } from "./types";
+import type { RuleFull, RuleRef, SignupPayload, User } from "./types";
 
 export const auth = {
   signup: (payload: SignupPayload) =>
@@ -25,8 +25,15 @@ export const auth = {
     apiFetch<{ occupations: string[]; employmentTypes: string[] }>("/auth/occupations"),
 };
 
+export const regulations = {
+  list: () => apiFetch<{ rules: RuleRef[] }>("/regulations"),
+  get: (documentNumber: string) =>
+    apiFetch<RuleFull>(`/regulations/${encodeURIComponent(documentNumber)}`),
+};
+
 // EventSource only supports GET, so we POST with fetch and parse the SSE
-// frames off the response body ourselves.
+// frames off the response body ourselves. Credentials are included so
+// authenticated streams (e.g. the chat agent) receive the session cookie.
 export async function sseFetch(
   path: string,
   body: unknown,
@@ -34,6 +41,7 @@ export async function sseFetch(
 ): Promise<void> {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });

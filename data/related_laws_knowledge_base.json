@@ -1,0 +1,185 @@
+{
+  "generated_for": "hackathon demo - conflict-detection statute knowledge base",
+  "source": "Congress.gov API v3 (https://api.congress.gov/v3)",
+  "note": "Public-law numbers/titles/policy areas were retrieved from the Congress.gov API v3. 'role' and 'conflict_note' are analytical annotations for the agent. Append '?api_key=YOUR_KEY&format=json' style params (already on the api_* URLs) to pull full text/subjects/summaries live. 'api_verified' flags whether the row was confirmed against the live API in this session.",
+  "laws": [
+    {
+      "congress": 111,
+      "type": "hr",
+      "number": "4173",
+      "official_title": "Dodd-Frank Wall Street Reform and Consumer Protection Act",
+      "common_name": "Dodd-Frank Wall Street Reform and Consumer Protection Act",
+      "public_law": "111-203",
+      "policy_area": "Finance and Financial Sector",
+      "api_verified": true,
+      "personas": [
+        "priya_community_banker"
+      ],
+      "role": "authorizing",
+      "related_rules": [
+        "FDIC Assessments Thresholds, Rate Schedules, and Adjustments",
+        "FDIC Resolution Submissions Required for Covered Insured Depository Institutions",
+        "CFTC/SEC Portfolio Margining and Cross-Margining",
+        "CFTC Data Reporting Requirements for Certain Event Contracts"
+      ],
+      "conflict_note": "Sec. 331 redefined the FDIC assessment base; Sec. 165(d) created the resolution-plan regime; Title VII gave CFTC/SEC swap authority. Flag rules that deviate from or duplicate these mandates.",
+      "laws": [
+        {
+          "number": "111-203",
+          "type": "Public Law"
+        }
+      ],
+      "legislation_url": "https://www.congress.gov/bill/111th-congress/house-bill/4173",
+      "api_detail_url": "https://api.congress.gov/v3/bill/111/hr/4173?format=json",
+      "api_text_url": "https://api.congress.gov/v3/bill/111/hr/4173/text?format=json",
+      "api_subjects_url": "https://api.congress.gov/v3/bill/111/hr/4173/subjects?format=json",
+      "api_summaries_url": "https://api.congress.gov/v3/bill/111/hr/4173/summaries?format=json"
+    },
+    {
+      "congress": 117,
+      "type": "hr",
+      "number": "5376",
+      "official_title": "An act to provide for reconciliation pursuant to title II of S. Con. Res. 14.",
+      "common_name": "Inflation Reduction Act of 2022",
+      "public_law": "117-169",
+      "policy_area": "Economics and Public Finance",
+      "api_verified": true,
+      "personas": [
+        "anjali_rao_pharmacist"
+      ],
+      "role": "authorizing",
+      "related_rules": [
+        "Medicare Drug Price Negotiation Program and Medicare Prescription Drug Benefit Program"
+      ],
+      "conflict_note": "Created Medicare drug-price-negotiation authority, carving out an exception to the 2003 MMA non-interference clause (42 U.S.C. 1395w-111(i)).",
+      "laws": [
+        {
+          "number": "117-169",
+          "type": "Public Law"
+        }
+      ],
+      "legislation_url": "https://www.congress.gov/bill/117th-congress/house-bill/5376",
+      "api_detail_url": "https://api.congress.gov/v3/bill/117/hr/5376?format=json",
+      "api_text_url": "https://api.congress.gov/v3/bill/117/hr/5376/text?format=json",
+      "api_subjects_url": "https://api.congress.gov/v3/bill/117/hr/5376/subjects?format=json",
+      "api_summaries_url": "https://api.congress.gov/v3/bill/117/hr/5376/summaries?format=json"
+    },
+    {
+      "congress": 108,
+      "type": "hr",
+      "number": "1",
+      "official_title": "Medicare Prescription Drug, Improvement, and Modernization Act of 2003",
+      "common_name": "Medicare Prescription Drug, Improvement, and Modernization Act of 2003 (MMA)",
+      "public_law": "108-173",
+      "policy_area": "Health",
+      "api_verified": false,
+      "personas": [
+        "anjali_rao_pharmacist"
+      ],
+      "role": "conflicting_prior_law",
+      "related_rules": [
+        "Medicare Drug Price Negotiation Program and Medicare Prescription Drug Benefit Program"
+      ],
+      "conflict_note": "Established the Part D 'non-interference clause' barring the HHS Secretary from negotiating drug prices; directly reversed by the 2022 IRA.",
+      "laws": [
+        {
+          "number": "108-173",
+          "type": "Public Law"
+        }
+      ],
+      "legislation_url": "https://www.congress.gov/bill/108th-congress/house-bill/1",
+      "api_detail_url": "https://api.congress.gov/v3/bill/108/hr/1?format=json",
+      "api_text_url": "https://api.congress.gov/v3/bill/108/hr/1/text?format=json",
+      "api_subjects_url": "https://api.congress.gov/v3/bill/108/hr/1/subjects?format=json",
+      "api_summaries_url": "https://api.congress.gov/v3/bill/108/hr/1/summaries?format=json"
+    },
+    {
+      "congress": 110,
+      "type": "hr",
+      "number": "3221",
+      "official_title": "Housing and Economic Recovery Act of 2008",
+      "common_name": "Housing and Economic Recovery Act of 2008 (HERA)",
+      "public_law": "110-289",
+      "policy_area": "Energy",
+      "api_verified": true,
+      "personas": [
+        "priya_community_banker"
+      ],
+      "role": "authorizing",
+      "related_rules": [
+        "FHFA Enterprise Duty To Serve Underserved Markets; Correction"
+      ],
+      "conflict_note": "Created FHFA and the Duty-to-Serve mandate; flag corrections that narrow the statutorily required underserved-markets coverage.",
+      "laws": [
+        {
+          "number": "110-289",
+          "type": "Public Law"
+        }
+      ],
+      "legislation_url": "https://www.congress.gov/bill/110th-congress/house-bill/3221",
+      "api_detail_url": "https://api.congress.gov/v3/bill/110/hr/3221?format=json",
+      "api_text_url": "https://api.congress.gov/v3/bill/110/hr/3221/text?format=json",
+      "api_subjects_url": "https://api.congress.gov/v3/bill/110/hr/3221/subjects?format=json",
+      "api_summaries_url": "https://api.congress.gov/v3/bill/110/hr/3221/summaries?format=json"
+    },
+    {
+      "congress": 117,
+      "type": "hr",
+      "number": "1319",
+      "official_title": "American Rescue Plan Act of 2021",
+      "common_name": "American Rescue Plan Act of 2021 (ARPA)",
+      "public_law": "117-2",
+      "policy_area": "Economics and Public Finance",
+      "api_verified": true,
+      "personas": [
+        "priya_community_banker"
+      ],
+      "role": "conflicting_prior_law",
+      "related_rules": [
+        "IRS Increase in Threshold for Requiring Information Reporting; wagering losses"
+      ],
+      "conflict_note": "Lowered the 1099-K information-reporting threshold to $600; effectively reversed by the 2025 reconciliation act (PL 119-21).",
+      "laws": [
+        {
+          "number": "117-2",
+          "type": "Public Law"
+        }
+      ],
+      "legislation_url": "https://www.congress.gov/bill/117th-congress/house-bill/1319",
+      "api_detail_url": "https://api.congress.gov/v3/bill/117/hr/1319?format=json",
+      "api_text_url": "https://api.congress.gov/v3/bill/117/hr/1319/text?format=json",
+      "api_subjects_url": "https://api.congress.gov/v3/bill/117/hr/1319/subjects?format=json",
+      "api_summaries_url": "https://api.congress.gov/v3/bill/117/hr/1319/summaries?format=json"
+    },
+    {
+      "congress": 119,
+      "type": "hr",
+      "number": "1",
+      "official_title": "An act to provide for reconciliation pursuant to title II of H. Con. Res. 14.",
+      "common_name": "2025 Reconciliation Act (One Big Beautiful Bill Act)",
+      "public_law": "119-21",
+      "policy_area": "Economics and Public Finance",
+      "api_verified": true,
+      "personas": [
+        "priya_community_banker"
+      ],
+      "role": "authorizing",
+      "related_rules": [
+        "IRS Increase in Threshold for Requiring Information Reporting; wagering losses"
+      ],
+      "conflict_note": "Raises the information-reporting threshold and modifies the wagering-loss limitation; the IRS rule implements it, reversing ARPA 2021.",
+      "laws": [
+        {
+          "number": "119-21",
+          "type": "Public Law"
+        }
+      ],
+      "legislation_url": "https://www.congress.gov/bill/119th-congress/house-bill/1",
+      "api_detail_url": "https://api.congress.gov/v3/bill/119/hr/1?format=json",
+      "api_text_url": "https://api.congress.gov/v3/bill/119/hr/1/text?format=json",
+      "api_subjects_url": "https://api.congress.gov/v3/bill/119/hr/1/subjects?format=json",
+      "api_summaries_url": "https://api.congress.gov/v3/bill/119/hr/1/summaries?format=json"
+    }
+  ],
+  "law_count": 6
+}

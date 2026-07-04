@@ -3,380 +3,184 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   ArrowUpRight,
   Bank,
-  Check,
-  CheckCircle,
-  Copy,
-  ListChecks,
+  FileText,
+  MagnifyingGlass,
+  NotePencil,
   PaperPlaneTilt,
   SignIn,
   SignOut,
+  Sparkle,
   Timer,
   UserCircle,
-  Users,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { API_URL, sseFetch } from "@/lib/api";
+import { sseFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import type { Rule, RuleSummary } from "@/lib/types";
+import type { ChatMessage, RuleRef } from "@/lib/types";
+import RuleDrawer from "@/components/RuleDrawer";
+import Markdown from "@/components/Markdown";
 
-type Step = "browse" | "summary" | "draft";
+type UiMessage = ChatMessage & { sources?: RuleRef[] };
 
-type SummaryResult = {
-  summary: RuleSummary;
-  detail: {
-    title: string;
-    abstract: string | null;
-    commentUrl: string | null;
-    htmlUrl: string;
-    agencies: string[];
-  };
-};
-
-const STEPS: { key: Step; label: string }[] = [
-  { key: "browse", label: "Find a rule" },
-  { key: "summary", label: "Understand it" },
-  { key: "draft", label: "Draft your comment" },
-];
-
-function daysLeft(commentEndDate: string | null): number | null {
-  if (!commentEndDate) return null;
-  const ms = new Date(commentEndDate).getTime() - Date.now();
-  return Math.max(0, Math.ceil(ms / 86_400_000));
-}
-
-function DeadlineBadge({ days }: { days: number | null }) {
-  if (days === null) return null;
-  const urgency =
-    days <= 5
-      ? "text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950/50"
-      : days <= 14
-        ? "text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/50"
-        : "text-muted bg-line/50";
+function TypingDots() {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${urgency}`}
-    >
-      <Timer size={13} weight="bold" />
-      {days} {days === 1 ? "day" : "days"} left
+    <span className="inline-flex items-center gap-1" aria-label="Assistant is typing">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted"
+          style={{ animationDelay: `${i * 120}ms` }}
+        />
+      ))}
     </span>
   );
 }
 
-function StepIndicator({ current }: { current: Step }) {
-  const currentIdx = STEPS.findIndex((s) => s.key === current);
-  return (
-    <nav aria-label="Progress" className="mb-10">
-      <ol className="flex items-center gap-2 sm:gap-3">
-        {STEPS.map((step, i) => {
-          const isDone = i < currentIdx;
-          const isCurrent = i === currentIdx;
-          return (
-            <li key={step.key} className="flex items-center gap-2 sm:gap-3">
-              {i > 0 && <span className="h-px w-5 bg-line sm:w-10" />}
-              <span
-                aria-current={isCurrent ? "step" : undefined}
-                className={`flex items-center gap-2 text-sm ${
-                  isCurrent
-                    ? "font-semibold text-foreground"
-                    : "font-medium text-muted"
-                }`}
-              >
-                <span
-                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                    isDone
-                      ? "bg-accent text-white"
-                      : isCurrent
-                        ? "border-2 border-accent text-accent-text"
-                        : "border border-line"
-                  }`}
-                >
-                  {isDone ? <Check size={13} weight="bold" /> : i + 1}
-                </span>
-                <span className="hidden sm:inline">{step.label}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-}
-
-function ErrorBanner({
-  message,
-  onRetry,
+function SourceCard({
+  rule,
+  onOpen,
 }: {
-  message: string;
-  onRetry?: () => void;
+  rule: RuleRef;
+  onOpen: (documentNumber: string) => void;
 }) {
   return (
-    <div
-      role="alert"
-      className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
+    <button
+      onClick={() => onOpen(rule.documentNumber)}
+      className="group flex w-full flex-col rounded-xl border border-line bg-surface p-3 text-left transition-all duration-150 hover:border-accent hover:shadow-sm active:translate-y-px"
     >
-      <WarningCircle size={18} weight="bold" className="mt-0.5 shrink-0" />
-      <div className="flex-1">
-        <p>{message}</p>
-        {onRetry && (
-          <button
-            onClick={onRetry}
-            className="mt-2 font-semibold underline underline-offset-2"
-          >
-            Try again
-          </button>
+      <div className="flex items-start justify-between gap-2">
+        <span className="line-clamp-2 text-sm font-medium leading-snug">
+          {rule.title}
+        </span>
+        <FileText
+          size={15}
+          weight="bold"
+          className="mt-0.5 shrink-0 text-muted transition-colors group-hover:text-accent-text"
+        />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="truncate rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-text">
+          {rule.agencies[rule.agencies.length - 1] ?? "Federal rule"}
+        </span>
+        {rule.commentable && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+            <Timer size={11} weight="bold" />
+            {rule.commentsCloseOn ? `by ${rule.commentsCloseOn}` : "open"}
+          </span>
         )}
+        <span className="text-[11px] text-muted">{rule.documentNumber}</span>
       </div>
-    </div>
-  );
-}
-
-function RuleListSkeleton() {
-  return (
-    <ul className="space-y-3" aria-hidden>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <li
-          key={i}
-          className="rounded-2xl border border-line bg-surface p-5"
-        >
-          <div className="skeleton h-4 w-4/5" />
-          <div className="mt-3 flex gap-2">
-            <div className="skeleton h-5 w-24" />
-            <div className="skeleton h-5 w-28" />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SummarySkeleton({ status }: { status: string | null }) {
-  return (
-    <div aria-hidden>
-      {status && (
-        <p className="mb-4 animate-pulse text-sm text-muted">{status}</p>
-      )}
-      <div className="rounded-2xl border border-line bg-surface p-6">
-        <div className="skeleton h-4 w-full" />
-        <div className="mt-2 skeleton h-4 w-11/12" />
-        <div className="mt-2 skeleton h-4 w-3/5" />
-        <div className="mt-8 grid gap-8 sm:grid-cols-2">
-          <div>
-            <div className="skeleton h-3 w-28" />
-            <div className="mt-3 skeleton h-4 w-full" />
-            <div className="mt-2 skeleton h-4 w-4/5" />
-          </div>
-          <div>
-            <div className="skeleton h-3 w-28" />
-            <div className="mt-3 skeleton h-4 w-full" />
-            <div className="mt-2 skeleton h-4 w-4/5" />
-          </div>
-        </div>
-      </div>
-    </div>
+    </button>
   );
 }
 
 export default function Home() {
   const { user, loading: authLoading, logout } = useAuth();
-  const [step, setStep] = useState<Step>("browse");
+  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [openDoc, setOpenDoc] = useState<string | null>(null);
 
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [loadingRules, setLoadingRules] = useState(true);
+  const openedRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [rule, setRule] = useState<Rule | null>(null);
-  const [data, setData] = useState<SummaryResult | null>(null);
-  const [summarizing, setSummarizing] = useState(false);
-
-  const [situation, setSituation] = useState("");
-  const [answers, setAnswers] = useState<string[]>([]);
-  const [drafting, setDrafting] = useState(false);
-  const [comment, setComment] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  const [submitterType, setSubmitterType] = useState<
-    "ANONYMOUS" | "INDIVIDUAL"
-  >("ANONYMOUS");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [certified, setCertified] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitResult, setSubmitResult] = useState<{
-    trackingNumber: string | null;
-    id: string | null;
-  } | null>(null);
-
-  const draftRef = useRef<HTMLTextAreaElement>(null);
-
-  function resetSubmission() {
-    setCertified(false);
-    setSubmitError(null);
-    setSubmitResult(null);
-  }
-
-  const loadRules = useCallback(() => {
-    setLoadingRules(true);
+  const streamAssistant = useCallback(async (outgoing: UiMessage[]) => {
+    setStreaming(true);
     setError(null);
-    fetch(`${API_URL}/rules`)
-      .then(async (res) => {
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.detail ?? "Failed to load rules");
-        setRules(json.rules);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingRules(false));
+    setToolStatus(null);
+    setMessages([...outgoing, { role: "assistant", content: "" }]);
+
+    const wire: ChatMessage[] = outgoing.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    const updateAssistant = (fn: (m: UiMessage) => UiMessage) =>
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last && last.role === "assistant") next[next.length - 1] = fn(last);
+        return next;
+      });
+
+    try {
+      await sseFetch("/chat", { messages: wire }, (event, d) => {
+        if (event === "delta") {
+          setToolStatus(null);
+          updateAssistant((m) => ({ ...m, content: m.content + (d.text as string) }));
+        } else if (event === "tool") {
+          const q = d.query as string;
+          setToolStatus(q ? `Searching regulations for “${q}”…` : "Searching regulations…");
+        } else if (event === "sources") {
+          const rules = d.rules as RuleRef[];
+          updateAssistant((m) => {
+            const byId = new Map<string, RuleRef>();
+            for (const r of m.sources ?? []) byId.set(r.documentNumber, r);
+            for (const r of rules) byId.set(r.documentNumber, r);
+            return { ...m, sources: [...byId.values()] };
+          });
+        } else if (event === "error") {
+          setError(d.error as string);
+        }
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setStreaming(false);
+      setToolStatus(null);
+    }
   }, []);
 
-  useEffect(loadRules, [loadRules]);
-
-  // Keep the newest streamed text in view while the draft writes itself.
+  // Open the session with a personalized regulation report once the user is known.
   useEffect(() => {
-    if (drafting && draftRef.current) {
-      draftRef.current.scrollTop = draftRef.current.scrollHeight;
-    }
-  }, [comment, drafting]);
+    if (authLoading || !user || openedRef.current) return;
+    openedRef.current = true;
+    streamAssistant([]);
+  }, [authLoading, user, streamAssistant]);
 
-  async function pickRule(r: Rule) {
-    setRule(r);
-    setStep("summary");
-    setError(null);
-    setData(null);
-    setSummarizing(true);
-    setStatus("Contacting the Federal Register…");
-    try {
-      await sseFetch("/summarize", { frDocNum: r.frDocNum }, (event, d) => {
-        if (event === "status") setStatus(d.message as string);
-        if (event === "error") setError(d.error as string);
-        if (event === "result") {
-          const result = d as unknown as SummaryResult;
-          setData(result);
-          setAnswers(new Array(result.summary.questions.length).fill(""));
-          setSituation("");
-        }
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setSummarizing(false);
-      setStatus(null);
-    }
-  }
-
-  async function draftComment() {
-    if (!rule || !data) return;
-    setDrafting(true);
-    setError(null);
-    setComment("");
-    resetSubmission();
-    setStep("draft");
-    setStatus("Reading the rule once more…");
-    try {
-      await sseFetch(
-        "/draft",
-        {
-          frDocNum: rule.frDocNum,
-          docketId: rule.docketId ?? "",
-          situation,
-          answers: data.summary.questions.map((q, i) => ({
-            question: q,
-            answer: answers[i] ?? "",
-          })),
-        },
-        (event, d) => {
-          if (event === "status") setStatus(d.message as string);
-          if (event === "error") setError(d.error as string);
-          if (event === "delta") {
-            setStatus(null);
-            setComment((c) => c + (d.text as string));
-          }
-        }
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setDrafting(false);
-      setStatus(null);
-    }
-  }
-
-  function copyComment() {
-    navigator.clipboard.writeText(comment).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
     });
+  }, [messages, toolStatus]);
+
+  function send() {
+    const text = input.trim();
+    if (!text || streaming) return;
+    setInput("");
+    streamAssistant([...messages, { role: "user", content: text }]);
   }
 
-  async function submitDirect() {
-    if (!rule) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      const res = await fetch(`${API_URL}/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentId: rule.documentId,
-          comment,
-          submitterType,
-          firstName: submitterType === "INDIVIDUAL" ? firstName : null,
-          lastName: submitterType === "INDIVIDUAL" ? lastName : null,
-          email: email || null,
-          sendEmailReceipt: Boolean(email),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(
-          typeof json.detail === "string"
-            ? json.detail
-            : "The submission was rejected. Check your entries and try again."
-        );
-      }
-      setSubmitResult(json);
-    } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Something went wrong"
-      );
-    } finally {
-      setSubmitting(false);
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
     }
   }
-
-  const submitReady =
-    certified &&
-    comment.length > 0 &&
-    comment.length <= 5000 &&
-    (submitterType === "ANONYMOUS" ||
-      (firstName.trim().length > 0 && lastName.trim().length > 0));
 
   return (
     <>
       <header className="border-b border-line">
-        <div className="mx-auto flex h-16 w-full max-w-4xl items-center justify-between px-5">
-          <div className="flex items-center gap-2.5">
+        <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between px-5">
+          <Link href="/" className="flex items-center gap-2.5">
             <Bank size={22} weight="duotone" className="text-accent-text" />
-            <span className="font-semibold tracking-tight">
-              Public Comment Copilot
-            </span>
-          </div>
+            <span className="font-semibold tracking-tight">Neptunus</span>
+          </Link>
           <div className="flex items-center gap-3">
-            <a
-              href="https://www.regulations.gov"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden items-center gap-1 text-sm text-muted transition-colors hover:text-foreground sm:inline-flex"
+            <Link
+              href="/comment"
+              className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
             >
-              Regulations.gov
-              <ArrowUpRight size={14} weight="bold" />
-            </a>
-            {!authLoading && (
-              user ? (
+              <NotePencil size={15} weight="bold" />
+              Draft a comment
+            </Link>
+            {!authLoading &&
+              (user ? (
                 <div className="flex items-center gap-2">
                   <span className="flex items-center gap-1.5 text-sm text-muted">
                     <UserCircle size={16} />
@@ -406,491 +210,170 @@ export default function Home() {
                     Sign up
                   </Link>
                 </div>
-              )
-            )}
+              ))}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10">
-        <StepIndicator current={step} />
-
-        {error && (
-          <ErrorBanner
-            message={error}
-            onRetry={step === "browse" ? loadRules : undefined}
-          />
-        )}
-
-        {step === "browse" && (
-          <section>
-            <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              Make your voice count in federal rulemaking.
-            </h1>
-            <p className="mt-3 max-w-xl text-muted">
-              These proposed rules are open for public comment right now. Pick
-              one that touches your life.
-            </p>
-
-            <div className="mt-8">
-              {loadingRules ? (
-                <RuleListSkeleton />
-              ) : rules.length === 0 && !error ? (
-                <div className="rounded-2xl border border-line bg-surface p-10 text-center">
-                  <Bank size={28} className="mx-auto text-muted" />
-                  <p className="mt-3 font-medium">
-                    No rules are open for comment right now
-                  </p>
-                  <p className="mt-1 text-sm text-muted">
-                    New proposed rules are published most weekdays. Check back
-                    soon.
-                  </p>
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {rules.map((r, i) => {
-                    const days = daysLeft(r.commentEndDate);
-                    return (
-                      <li
-                        key={r.documentId}
-                        className="animate-fade-up"
-                        style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
-                      >
-                        <button
-                          onClick={() => pickRule(r)}
-                          className="group w-full rounded-2xl border border-line bg-surface p-5 text-left transition-all duration-200 hover:border-accent hover:shadow-sm active:translate-y-px"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <span className="font-medium leading-snug">
-                              {r.title}
-                            </span>
-                            <ArrowUpRight
-                              size={16}
-                              weight="bold"
-                              className="mt-1 shrink-0 text-muted transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-accent-text"
-                            />
-                          </div>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-text">
-                              {r.agencyId}
-                            </span>
-                            <DeadlineBadge days={days} />
-                          </div>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </section>
-        )}
-
-        {step === "summary" && rule && (
-          <section>
-            <button
-              onClick={() => setStep("browse")}
-              className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground"
-            >
-              <ArrowLeft size={15} weight="bold" />
-              All open rules
-            </button>
-
-            <h1 className="text-xl font-semibold leading-snug tracking-tight sm:text-2xl">
-              {rule.title}
-            </h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-text">
-                {rule.agencyId}
-              </span>
-              <DeadlineBadge days={daysLeft(rule.commentEndDate)} />
-            </div>
-
-            <div className="mt-8">
-              {summarizing && <SummarySkeleton status={status} />}
-
-              {data && (
-                <div className="animate-fade-up">
-                  <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8">
-                    <p className="text-base leading-relaxed sm:text-lg">
-                      {data.summary.plainSummary}
-                    </p>
-                    <div className="mt-8 grid gap-8 sm:grid-cols-2">
-                      <div>
-                        <h2 className="flex items-center gap-2 text-sm font-semibold">
-                          <Users
-                            size={16}
-                            weight="bold"
-                            className="text-accent-text"
-                          />
-                          Who it affects
-                        </h2>
-                        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
-                          {data.summary.whoItAffects.map((w) => (
-                            <li key={w}>{w}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <h2 className="flex items-center gap-2 text-sm font-semibold">
-                          <ListChecks
-                            size={16}
-                            weight="bold"
-                            className="text-accent-text"
-                          />
-                          Key changes
-                        </h2>
-                        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
-                          {data.summary.keyChanges.map((k) => (
-                            <li key={k}>{k}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                    <a
-                      href={data.detail.htmlUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-8 inline-flex items-center gap-1 text-sm font-medium text-accent-text transition-colors hover:underline"
-                    >
-                      Read the full rule on the Federal Register
-                      <ArrowUpRight size={14} weight="bold" />
-                    </a>
-                  </div>
-
-                  <div className="mt-10">
-                    <h2 className="text-lg font-semibold tracking-tight">
-                      Make it about you
-                    </h2>
-                    <p className="mt-1 text-sm text-muted">
-                      Your answers turn a form letter into a substantive
-                      comment.
-                    </p>
-
-                    <div className="mt-6 space-y-5">
-                      <div>
-                        <label
-                          htmlFor="situation"
-                          className="block text-sm font-medium"
-                        >
-                          Describe your situation
-                        </label>
-                        <textarea
-                          id="situation"
-                          value={situation}
-                          onChange={(e) => setSituation(e.target.value)}
-                          rows={3}
-                          className="mt-2 w-full rounded-[10px] border border-line bg-surface p-3 text-sm leading-relaxed transition-colors placeholder:text-muted/60 focus:border-accent"
-                          placeholder="I run a 12-employee landscaping business in Ohio…"
-                        />
-                        <p className="mt-1.5 text-xs text-muted">
-                          A sentence or two is enough. Specifics make your
-                          comment stronger.
-                        </p>
-                      </div>
-
-                      {data.summary.questions.map((q, i) => (
-                        <div key={q}>
-                          <label
-                            htmlFor={`q-${i}`}
-                            className="block text-sm font-medium"
-                          >
-                            {q}
-                          </label>
-                          <input
-                            id={`q-${i}`}
-                            value={answers[i] ?? ""}
-                            onChange={(e) => {
-                              const next = [...answers];
-                              next[i] = e.target.value;
-                              setAnswers(next);
-                            }}
-                            className="mt-2 w-full rounded-[10px] border border-line bg-surface p-3 text-sm transition-colors focus:border-accent"
-                          />
-                        </div>
-                      ))}
-
-                      <button
-                        onClick={draftComment}
-                        disabled={drafting}
-                        className="rounded-[10px] bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-50"
-                      >
-                        Draft my comment
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {step === "draft" && rule && data && (
-          <section>
-            <button
-              onClick={() => setStep("summary")}
-              className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground"
-            >
-              <ArrowLeft size={15} weight="bold" />
-              Back to the summary
-            </button>
-
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                Your draft comment
-              </h1>
-              {status && (
-                <span className="animate-pulse text-sm text-muted">
-                  {status}
-                </span>
-              )}
-              {drafting && !status && (
-                <span className="animate-pulse text-sm text-muted">
-                  Writing…
-                </span>
-              )}
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-line bg-surface transition-colors focus-within:border-accent">
-              <textarea
-                ref={draftRef}
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={17}
-                readOnly={drafting}
-                aria-label="Draft comment text"
-                className="w-full resize-y rounded-2xl bg-transparent p-5 text-[15px] leading-relaxed outline-none sm:p-6"
-              />
-            </div>
-            <p
-              className={`mt-2 text-xs ${
-                comment.length > 5000
-                  ? "font-semibold text-red-600 dark:text-red-400"
-                  : "text-muted"
-              }`}
-            >
-              {comment.length.toLocaleString()} / 5,000 characters
-              (Regulations.gov limit)
-            </p>
-
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <button
-                onClick={copyComment}
-                disabled={drafting || comment.length === 0}
-                className="inline-flex items-center gap-2 rounded-[10px] bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-50"
-              >
-                {copied ? (
-                  <Check size={15} weight="bold" />
-                ) : (
-                  <Copy size={15} weight="bold" />
-                )}
-                {copied ? "Copied" : "Copy comment"}
-              </button>
-              {data.detail.commentUrl && (
-                <a
-                  href={data.detail.commentUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-[10px] border border-line bg-surface px-5 py-2.5 text-sm font-semibold transition-all duration-150 hover:border-accent active:translate-y-px"
-                >
-                  Submit on Regulations.gov
-                  <ArrowUpRight size={15} weight="bold" />
-                </a>
-              )}
-            </div>
-
-            <div className="mt-10 rounded-2xl border border-line bg-surface p-6 sm:p-8">
-              <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-                <PaperPlaneTilt
-                  size={18}
-                  weight="bold"
-                  className="text-accent-text"
-                />
-                Submit directly from here
-              </h2>
-              <p className="mt-1 text-sm text-muted">
-                Sends your comment through the official Regulations.gov
-                commenting API.
-              </p>
-
-              {submitResult ? (
-                <div className="mt-5 flex items-start gap-3 rounded-[10px] border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <CheckCircle
-                    size={18}
-                    weight="bold"
-                    className="mt-0.5 shrink-0"
-                  />
-                  <div>
-                    <p className="font-semibold">Comment submitted</p>
-                    <p className="mt-1">
-                      {submitResult.trackingNumber
-                        ? `Tracking number: ${submitResult.trackingNumber}. Save it.`
-                        : "Submission accepted."}{" "}
-                      The agency reviews API submissions before they appear
-                      publicly on Regulations.gov.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <fieldset className="mt-5">
-                    <legend className="text-sm font-medium">Submit as</legend>
-                    <div className="mt-2 flex gap-4">
-                      {(
-                        [
-                          ["ANONYMOUS", "Anonymous"],
-                          ["INDIVIDUAL", "With my name"],
-                        ] as const
-                      ).map(([value, label]) => (
-                        <label
-                          key={value}
-                          className="flex cursor-pointer items-center gap-2 text-sm"
-                        >
-                          <input
-                            type="radio"
-                            name="submitterType"
-                            checked={submitterType === value}
-                            onChange={() => setSubmitterType(value)}
-                            className="accent-[var(--accent)]"
-                          />
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-
-                  {submitterType === "INDIVIDUAL" && (
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="first-name"
-                          className="block text-sm font-medium"
-                        >
-                          First name
-                        </label>
-                        <input
-                          id="first-name"
-                          value={firstName}
-                          maxLength={25}
-                          onChange={(e) => setFirstName(e.target.value)}
-                          className="mt-2 w-full rounded-[10px] border border-line bg-surface p-3 text-sm transition-colors focus:border-accent"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="last-name"
-                          className="block text-sm font-medium"
-                        >
-                          Last name
-                        </label>
-                        <input
-                          id="last-name"
-                          value={lastName}
-                          maxLength={25}
-                          onChange={(e) => setLastName(e.target.value)}
-                          className="mt-2 w-full rounded-[10px] border border-line bg-surface p-3 text-sm transition-colors focus:border-accent"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mt-4">
-                    <label
-                      htmlFor="email"
-                      className="block text-sm font-medium"
-                    >
-                      Email <span className="text-muted">(optional)</span>
-                    </label>
-                    <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      maxLength={100}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="mt-2 w-full rounded-[10px] border border-line bg-surface p-3 text-sm transition-colors focus:border-accent"
-                    />
-                    <p className="mt-1.5 text-xs text-muted">
-                      If provided, Regulations.gov emails you a receipt.
-                    </p>
-                  </div>
-
-                  <label className="mt-5 flex cursor-pointer items-start gap-2.5 text-sm leading-relaxed">
-                    <input
-                      type="checkbox"
-                      checked={certified}
-                      onChange={(e) => setCertified(e.target.checked)}
-                      className="mt-1 accent-[var(--accent)]"
-                    />
-                    I reviewed this comment and it reflects my own views and
-                    my real situation.
-                  </label>
-
-                  {submitError && (
-                    <div
-                      role="alert"
-                      className="mt-4 flex items-start gap-3 rounded-[10px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
-                    >
-                      <WarningCircle
-                        size={18}
-                        weight="bold"
-                        className="mt-0.5 shrink-0"
-                      />
-                      <p>{submitError}</p>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={submitDirect}
-                    disabled={!submitReady || submitting}
-                    className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-50"
-                  >
-                    <PaperPlaneTilt size={15} weight="bold" />
-                    {submitting ? "Submitting…" : "Submit to Regulations.gov"}
-                  </button>
-
-                  <p className="mt-4 text-xs leading-relaxed text-muted">
-                    By submitting you agree to the Regulations.gov{" "}
-                    <a
-                      href="https://www.regulations.gov/user-notice"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline underline-offset-2"
-                    >
-                      user notice
-                    </a>{" "}
-                    and{" "}
-                    <a
-                      href="https://www.regulations.gov/privacy-notice"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline underline-offset-2"
-                    >
-                      privacy notice
-                    </a>
-                    .
-                  </p>
-                </>
-              )}
-            </div>
-
-            <p className="mt-8 max-w-xl text-xs leading-relaxed text-muted">
-              Review and edit before you submit. This comment is yours, not
-              the AI&apos;s. Nothing is sent anywhere until you submit it
-              yourself.
-            </p>
-          </section>
-        )}
-      </main>
-
-      <footer className="border-t border-line">
-        <div className="mx-auto w-full max-w-4xl px-5 py-6">
-          <p className="text-xs leading-relaxed text-muted">
-            Under 5 U.S.C. § 553, federal agencies must consider substantive
-            public comments before finalizing a proposed rule. A specific,
-            personal comment carries more weight than a thousand form letters.
+      {!authLoading && !user ? (
+        <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-5 py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft">
+            <Sparkle size={24} weight="duotone" className="text-accent-text" />
+          </div>
+          <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Your personal regulatory assistant
+          </h1>
+          <p className="mt-3 max-w-md text-muted">
+            Sign in and Neptunus will pull the latest federal rules that could
+            affect you, tailored to your occupation and location, and answer
+            your questions about them.
           </p>
-        </div>
-      </footer>
+          <div className="mt-8 flex items-center gap-3">
+            <Link
+              href="/auth/signup"
+              className="rounded-[10px] bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-hover"
+            >
+              Get started
+            </Link>
+            <Link
+              href="/auth/login"
+              className="rounded-[10px] border border-line bg-surface px-5 py-2.5 text-sm font-semibold transition hover:border-accent"
+            >
+              Sign in
+            </Link>
+          </div>
+        </main>
+      ) : (
+        <main className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col px-5">
+          <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-8">
+            {authLoading && (
+              <p className="text-center text-sm text-muted">Loading…</p>
+            )}
+
+            {messages.map((m, i) => {
+              const isUser = m.role === "user";
+              const isLast = i === messages.length - 1;
+              const showTyping =
+                !isUser && m.content === "" && (streaming || isLast);
+              return (
+                <div
+                  key={i}
+                  className="animate-fade-up space-y-3"
+                  style={{ animationDelay: `${Math.min(i, 4) * 40}ms` }}
+                >
+                  <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[80%] ${
+                        isUser
+                          ? "whitespace-pre-wrap bg-accent text-white"
+                          : "border border-line bg-surface text-foreground"
+                      }`}
+                    >
+                      {isUser ? (
+                        m.content
+                      ) : m.content ? (
+                        <Markdown content={m.content} />
+                      ) : showTyping ? (
+                        toolStatus ? (
+                          <span className="inline-flex items-center gap-2 text-sm text-muted">
+                            <MagnifyingGlass
+                              size={15}
+                              weight="bold"
+                              className="animate-pulse text-accent-text"
+                            />
+                            {toolStatus}
+                          </span>
+                        ) : (
+                          <TypingDots />
+                        )
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {!isUser && m.sources && m.sources.length > 0 && (
+                    <div>
+                      <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                        Relevant rules · click to read
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {m.sources.map((r) => (
+                          <SourceCard
+                            key={r.documentNumber}
+                            rule={r}
+                            onOpen={setOpenDoc}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!isUser &&
+                    isLast &&
+                    streaming &&
+                    m.content !== "" &&
+                    toolStatus && (
+                      <p className="inline-flex items-center gap-2 px-1 text-xs text-muted">
+                        <MagnifyingGlass
+                          size={13}
+                          weight="bold"
+                          className="animate-pulse text-accent-text"
+                        />
+                        {toolStatus}
+                      </p>
+                    )}
+                </div>
+              );
+            })}
+
+            {error && (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
+              >
+                <WarningCircle size={18} weight="bold" className="mt-0.5 shrink-0" />
+                <p>{error}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="sticky bottom-0 bg-background pb-6 pt-2">
+            <div className="flex items-end gap-2 rounded-2xl border border-line bg-surface p-2 transition-colors focus-within:border-accent">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                placeholder="Ask about rules, laws, or regulations that affect you…"
+                aria-label="Message"
+                className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] leading-relaxed outline-none placeholder:text-muted/70"
+              />
+              <button
+                onClick={send}
+                disabled={streaming || input.trim().length === 0}
+                aria-label="Send message"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-accent text-white transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-40"
+              >
+                <PaperPlaneTilt size={18} weight="fill" />
+              </button>
+            </div>
+            <p className="mt-2 px-1 text-center text-xs text-muted">
+              Neptunus searches current Federal Register proposed rules. It can
+              be wrong and does not give legal advice, verify anything important.{" "}
+              <a
+                href="https://www.regulations.gov"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 underline underline-offset-2"
+              >
+                Regulations.gov
+                <ArrowUpRight size={11} weight="bold" />
+              </a>
+            </p>
+          </div>
+        </main>
+      )}
+
+      <RuleDrawer documentNumber={openDoc} onClose={() => setOpenDoc(null)} />
     </>
   );
 }

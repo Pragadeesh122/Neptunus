@@ -3,22 +3,32 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from auth import get_current_user
 from config import OPENROUTER_MODEL
 from database import init_db
 from federal_register import get_rule_detail
-from llm import chat_json, stream_chat
-from prompts import draft_messages, summarize_messages
+from llm import chat_json, stream_chat, stream_completion
+from prompts import chat_messages, draft_messages, summarize_messages
+from regulation_search import (
+    REGULATION_SEARCH_TOOL,
+    RegulationDBUnavailable,
+    get_rule_full,
+    list_rules,
+    run_regulation_search,
+)
 from regulations import (
     CommentSubmissionError,
     list_open_proposed_rules,
     submit_comment,
 )
 from routers.auth import router as auth_router
-from schemas import DraftRequest, SubmitRequest, SummarizeRequest
+from schemas import ChatRequest, DraftRequest, SubmitRequest, SummarizeRequest
+
+MAX_TOOL_ROUNDS = 5
 
 
 @asynccontextmanager
@@ -70,6 +80,107 @@ async def submit(req: SubmitRequest, request: Request):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     return result
+
+
+@app.post("/chat")
+async def chat(
+    req: ChatRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    client = request.app.state.client
+
+    async def gen() -> AsyncIterator[str]:
+        try:
+            messages = chat_messages(user, req.messages)
+            tools = [REGULATION_SEARCH_TOOL]
+
+            for _ in range(MAX_TOOL_ROUNDS):
+                content_buf = ""
+                tool_calls: list[dict] = []
+                async for kind, payload in stream_completion(
+                    client, messages, tools=tools, temperature=0.4
+                ):
+                    if kind == "content":
+                        content_buf += payload  # type: ignore[operator]
+                        yield sse("delta", {"text": payload})
+                    elif kind == "final":
+                        tool_calls = payload["tool_calls"]  # type: ignore[index]
+
+                if not tool_calls:
+                    break
+
+                # Record the assistant's tool-call turn, then run each tool.
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": content_buf or None,
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tc["name"],
+                                    "arguments": tc["arguments"],
+                                },
+                            }
+                            for tc in tool_calls
+                        ],
+                    }
+                )
+
+                for tc in tool_calls:
+                    if tc["name"] == "search_regulations":
+                        result = await run_regulation_search(client, tc["arguments"])
+                        yield sse("tool", {"name": "search_regulations", "query": result["query"]})
+                        if result["rules"]:
+                            yield sse("sources", {"rules": result["rules"]})
+                        tool_content = result["content"]
+                    else:
+                        tool_content = f"Unknown tool: {tc['name']}"
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "name": tc["name"],
+                            "content": tool_content,
+                        }
+                    )
+            else:
+                # Hit the tool-round cap: force a final answer with no more tools.
+                async for delta in stream_chat(client, messages, temperature=0.4):
+                    yield sse("delta", {"text": delta})
+
+            yield sse("done", {})
+        except RegulationDBUnavailable as exc:
+            yield sse("error", {"error": f"Regulation database unavailable: {exc}"})
+        except Exception as exc:
+            yield sse("error", {"error": str(exc)})
+
+    return sse_response(gen())
+
+
+@app.get("/regulations")
+async def regulations():
+    try:
+        return {"rules": list_rules()}
+    except RegulationDBUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/regulations/{document_number}")
+async def regulation_detail(document_number: str):
+    try:
+        rule = get_rule_full(document_number)
+    except RegulationDBUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Regulation not found")
+    return rule
 
 
 @app.post("/summarize")
