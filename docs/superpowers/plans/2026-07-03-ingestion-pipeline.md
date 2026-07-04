@@ -382,10 +382,9 @@ dedupes them by ``document_number`` (merging persona provenance), then fetches
 each rule's full text from ``raw_text_url`` with a PDF-to-text fallback.
 """
 import io
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass
 from pathlib import Path
-
-import httpx
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_JSON = REPO_ROOT / "data" / "persona_rules_knowledge_base.json"
@@ -406,7 +405,6 @@ class RuleRecord:
 
 
 def load_rules(json_path=DEFAULT_JSON):
-    import json
     data = json.loads(Path(json_path).read_text())
     by_num = {}
     for persona_key, persona in data.get("personas", {}).items():
