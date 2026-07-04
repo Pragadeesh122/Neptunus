@@ -112,8 +112,8 @@ export default function Home() {
           setToolStatus(null);
           updateAssistant((m) => ({ ...m, content: m.content + (d.text as string) }));
         } else if (event === "tool") {
-          const q = d.query as string;
-          setToolStatus(q ? `Searching regulations for “${q}”…` : "Searching regulations…");
+          const label = (d.label as string) || "Working…";
+          setToolStatus(label);
         } else if (event === "sources") {
           const rules = d.rules as RuleRef[];
           updateAssistant((m) => {

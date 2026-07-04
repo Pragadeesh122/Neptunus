@@ -45,6 +45,25 @@ async def chat_json(
         raise RuntimeError(f"Model returned invalid JSON: {content[:500]}")
 
 
+async def complete(
+    client: httpx.AsyncClient, messages: list[dict], temperature: float = 0.4
+) -> str:
+    """Single non-streaming completion; returns the full assistant text."""
+    res = await client.post(
+        OPENROUTER_URL,
+        headers=_headers(),
+        json={
+            "model": OPENROUTER_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+        },
+        timeout=180,
+    )
+    if res.status_code != 200:
+        raise RuntimeError(f"OpenRouter {res.status_code}: {res.text}")
+    return res.json()["choices"][0]["message"]["content"]
+
+
 async def stream_completion(
     client: httpx.AsyncClient,
     messages: list[dict],

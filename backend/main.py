@@ -7,10 +7,17 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from agent_tools import (
+    DRAFT_COMMENT_TOOL,
+    LEGAL_LINEAGE_TOOL,
+    run_draft_comment,
+    run_legal_lineage,
+)
 from auth import get_current_user
 from config import OPENROUTER_MODEL
 from database import init_db
 from federal_register import get_rule_detail
+from law_search import LAW_SEARCH_TOOL, run_law_search
 from llm import chat_json, stream_chat, stream_completion
 from prompts import chat_messages, draft_messages, summarize_messages
 from regulation_search import (
@@ -27,8 +34,59 @@ from regulations import (
 )
 from routers.auth import router as auth_router
 from schemas import ChatRequest, DraftRequest, SubmitRequest, SummarizeRequest
+from web_tools import FETCH_URL_TOOL, WEB_SEARCH_TOOL, run_fetch_url, run_web_search
 
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 6
+
+AGENT_TOOLS = [
+    REGULATION_SEARCH_TOOL,
+    LAW_SEARCH_TOOL,
+    WEB_SEARCH_TOOL,
+    FETCH_URL_TOOL,
+    DRAFT_COMMENT_TOOL,
+    LEGAL_LINEAGE_TOOL,
+]
+
+
+def _select_sources(
+    answer: str, candidates: dict[str, dict], forced: dict[str, dict]
+) -> list[dict]:
+    """Surface only the rules the agent actually referenced (by document number
+    or full title), plus rules a tool intentionally produced (draft/lineage)."""
+    text = (answer or "").lower()
+    surfaced: list[dict] = list(forced.values())
+    for dn, ref in candidates.items():
+        if dn in forced:
+            continue
+        title = (ref.get("title") or "").lower()
+        if dn.lower() in text or (len(title) > 15 and title in text):
+            surfaced.append(ref)
+    return surfaced
+
+
+async def _run_agent_tool(client, name: str, arguments):
+    """Execute one tool call. Returns (label, tool_content, rules_for_sources)."""
+    if name == "search_regulations":
+        r = await run_regulation_search(client, arguments)
+        return f"Searching regulations for “{r['query']}”…", r["content"], r["rules"]
+    if name == "search_laws":
+        r = await run_law_search(client, arguments)
+        return f"Searching laws for “{r['query']}”…", r["content"], None
+    if name == "web_search":
+        r = await run_web_search(arguments)
+        return f"Searching the web for “{r['query']}”…", r["content"], None
+    if name == "fetch_url":
+        r = await run_fetch_url(client, arguments)
+        return f"Reading {r['url']}…", r["content"], None
+    if name == "draft_public_comment":
+        r = await run_draft_comment(client, arguments)
+        rules = [r["rule"]] if r.get("rule") else None
+        return "Drafting your public comment…", r["content"], rules
+    if name == "build_legal_lineage":
+        r = await run_legal_lineage(client, arguments)
+        rules = [r["rule"]] if r.get("rule") else None
+        return "Building the legal lineage timeline…", r["content"], rules
+    return f"Running {name}…", f"Unknown tool: {name}", None
 
 
 @asynccontextmanager
@@ -93,7 +151,13 @@ async def chat(
     async def gen() -> AsyncIterator[str]:
         try:
             messages = chat_messages(user, req.messages)
-            tools = [REGULATION_SEARCH_TOOL]
+            tools = AGENT_TOOLS
+
+            full_answer = ""
+            # Rules retrieved by search_regulations (only surfaced if the agent
+            # actually cites them); rules from draft/lineage are always surfaced.
+            candidate_rules: dict[str, dict] = {}
+            forced_rules: dict[str, dict] = {}
 
             for _ in range(MAX_TOOL_ROUNDS):
                 content_buf = ""
@@ -107,6 +171,7 @@ async def chat(
                     elif kind == "final":
                         tool_calls = payload["tool_calls"]  # type: ignore[index]
 
+                full_answer += content_buf
                 if not tool_calls:
                     break
 
@@ -130,14 +195,18 @@ async def chat(
                 )
 
                 for tc in tool_calls:
-                    if tc["name"] == "search_regulations":
-                        result = await run_regulation_search(client, tc["arguments"])
-                        yield sse("tool", {"name": "search_regulations", "query": result["query"]})
-                        if result["rules"]:
-                            yield sse("sources", {"rules": result["rules"]})
-                        tool_content = result["content"]
-                    else:
-                        tool_content = f"Unknown tool: {tc['name']}"
+                    label, tool_content, rules = await _run_agent_tool(
+                        client, tc["name"], tc["arguments"]
+                    )
+                    yield sse("tool", {"name": tc["name"], "label": label})
+                    for r in rules or []:
+                        dn = r.get("documentNumber")
+                        if not dn:
+                            continue
+                        if tc["name"] == "search_regulations":
+                            candidate_rules.setdefault(dn, r)
+                        else:
+                            forced_rules[dn] = r
                     messages.append(
                         {
                             "role": "tool",
@@ -149,7 +218,14 @@ async def chat(
             else:
                 # Hit the tool-round cap: force a final answer with no more tools.
                 async for delta in stream_chat(client, messages, temperature=0.4):
+                    full_answer += delta
                     yield sse("delta", {"text": delta})
+
+            # Only surface rules the agent actually cited (by document number or
+            # full title), plus any rule a tool intentionally produced.
+            surfaced = _select_sources(full_answer, candidate_rules, forced_rules)
+            if surfaced:
+                yield sse("sources", {"rules": surfaced})
 
             yield sse("done", {})
         except RegulationDBUnavailable as exc:
