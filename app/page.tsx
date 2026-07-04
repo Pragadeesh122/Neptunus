@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -10,11 +11,15 @@ import {
   Copy,
   ListChecks,
   PaperPlaneTilt,
+  SignIn,
+  SignOut,
   Timer,
+  UserCircle,
   Users,
   WarningCircle,
 } from "@phosphor-icons/react";
 import { API_URL, sseFetch } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import type { Rule, RuleSummary } from "@/lib/types";
 
 type Step = "browse" | "summary" | "draft";
@@ -175,6 +180,7 @@ function SummarySkeleton({ status }: { status: string | null }) {
 }
 
 export default function Home() {
+  const { user, loading: authLoading, logout } = useAuth();
   const [step, setStep] = useState<Step>("browse");
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -359,15 +365,50 @@ export default function Home() {
               Public Comment Copilot
             </span>
           </div>
-          <a
-            href="https://www.regulations.gov"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            Regulations.gov
-            <ArrowUpRight size={14} weight="bold" />
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://www.regulations.gov"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden items-center gap-1 text-sm text-muted transition-colors hover:text-foreground sm:inline-flex"
+            >
+              Regulations.gov
+              <ArrowUpRight size={14} weight="bold" />
+            </a>
+            {!authLoading && (
+              user ? (
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-sm text-muted">
+                    <UserCircle size={16} />
+                    {user.firstName ?? user.email}
+                  </span>
+                  <button
+                    onClick={() => logout()}
+                    className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
+                  >
+                    <SignOut size={15} weight="bold" />
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/auth/login"
+                    className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
+                  >
+                    <SignIn size={15} weight="bold" />
+                    Sign in
+                  </Link>
+                  <Link
+                    href="/auth/signup"
+                    className="rounded-[10px] bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-hover"
+                  >
+                    Sign up
+                  </Link>
+                </div>
+              )
+            )}
+          </div>
         </div>
       </header>
 
