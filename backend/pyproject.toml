@@ -12,4 +12,12 @@ dependencies = [
     "python-jose[cryptography]>=3.3",
     "psycopg2-binary>=2.9",
     "pydantic[email]>=2.0",
+    "pinecone>=9.1.0",
+    "pypdf>=6.14.2",
+    "openai>=2.44.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]
