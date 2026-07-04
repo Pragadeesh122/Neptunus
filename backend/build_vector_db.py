@@ -61,7 +61,7 @@ SECTION_HEADER_RE = re.compile(
 # Roman-numeral top-level subsections within SUPPLEMENTARY INFORMATION,
 # e.g. "I. Executive Summary", "II. Authority for This Rulemaking".
 ROMAN_SECTION_RE = re.compile(r"^([IVXLC]+)\.\s+(.+)$")
-PAGE_MARKER_RE = re.compile(r"\[\[Page\s+([0-9A-Za-z\-]+)\]\]")
+PAGE_MARKER_RE = re.compile(r"\[\[Page\s+([^\]]+?)\]\]")
 
 
 # --------------------------------------------------------------------------- #
@@ -177,22 +177,25 @@ def _page_at(text: str, offset: int, page_index: list[tuple[int, str]]) -> str |
     return current
 
 
-def chunk_document(text: str) -> list[dict]:
-    """Structure-aware chunking, returning dicts with text + structural metadata."""
-    # Record page markers, then remove them so they don't pollute chunk text.
-    page_index = [(m.start(), m.group(1)) for m in PAGE_MARKER_RE.finditer(text)]
-    # Map cleaned-text offsets by removing markers while shifting recorded positions.
+def strip_page_markers(text: str) -> tuple[str, list[tuple[int, str]]]:
+    """Remove [[Page N]] markers from text, returning the cleaned text plus a list
+    of (offset_in_cleaned_text, page_number) so callers can look up which page any
+    chunk starts on. Shared by every builder so chunking behaves identically."""
     cleaned_parts: list[str] = []
     cleaned_pages: list[tuple[int, str]] = []
     last = 0
-    shift = 0
     for m in PAGE_MARKER_RE.finditer(text):
         cleaned_parts.append(text[last : m.start()])
         cleaned_len = sum(len(p) for p in cleaned_parts)
-        cleaned_pages.append((cleaned_len, m.group(1)))
+        cleaned_pages.append((cleaned_len, m.group(1).strip()))
         last = m.end()
     cleaned_parts.append(text[last:])
-    cleaned = "".join(cleaned_parts)
+    return "".join(cleaned_parts), cleaned_pages
+
+
+def chunk_document(text: str) -> list[dict]:
+    """Structure-aware chunking, returning dicts with text + structural metadata."""
+    cleaned, cleaned_pages = strip_page_markers(text)
 
     chunks: list[dict] = []
     order = 0

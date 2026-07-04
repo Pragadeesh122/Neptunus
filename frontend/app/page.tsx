@@ -7,7 +7,6 @@ import {
   Bank,
   FileText,
   MagnifyingGlass,
-  NotePencil,
   PaperPlaneTilt,
   SignIn,
   SignOut,
@@ -172,13 +171,6 @@ export default function Home() {
             <span className="font-semibold tracking-tight">Neptunus</span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link
-              href="/comment"
-              className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
-            >
-              <NotePencil size={15} weight="bold" />
-              Draft a comment
-            </Link>
             {!authLoading &&
               (user ? (
                 <div className="flex items-center gap-2">
